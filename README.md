@@ -1,8 +1,8 @@
 # Gamepad Launcher
 
-Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Steam** v režimu Big Picture, **Heroic Games Launcher** v console módu na celou obrazovku, nebo **vypni PC**. Celé to ovládáš jen ovladačem, bez myši a klávesnice.
+Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Steam** v režimu Big Picture, **Heroic Games Launcher** v console módu na celou obrazovku, nebo otevři menu **Vypnout** (uspat, vypnout PC, zavřít launchery). Celé to ovládáš jen ovladačem, bez myši a klávesnice.
 
-*English: Press the Home/Guide button on your gamepad to get a fullscreen menu: Steam Big Picture, Heroic (console mode, fullscreen) or power off. Linux, no root, no extra Python packages.*
+*English: Press the Home/Guide button on your gamepad to get a fullscreen menu: Steam Big Picture, Heroic (console mode, fullscreen) or a power menu (suspend, power off, close launchers). Linux, no root, no extra Python packages.*
 
 ## Jak to funguje
 
@@ -19,11 +19,19 @@ Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Stea
 | **Home** | otevřít / zavřít menu |
 | **◀ ▶** (D-pad nebo levá páčka) | výběr |
 | **A** nebo **Start** | spustit |
-| **B** | zavřít menu |
+| **B** | zpět / zavřít menu |
 
-**Vypnout** se ptá na potvrzení: první **A** kartu zčervená, druhé **A** PC vypne.
+### Menu Vypnout
 
-Menu jde ovládat i myší a klávesnicí (šipky, Enter, Esc).
+Položka **Vypnout** otevře podmenu:
+
+- **Uspat**: uspí PC
+- **Vypnout PC**: ptá se na potvrzení, první **A** kartu zčervená, druhé **A** PC vypne
+- **Zavřít launchery**: ukončí Steam i Heroic, pokud běží
+
+Tlačítkem **B** se vrátíš do hlavního menu.
+
+Menu jde ovládat i myší a klávesnicí (šipky, Enter, Esc/Backspace).
 
 ## Požadavky
 
@@ -60,7 +68,7 @@ Pak se odhlas a znovu přihlas a spusť `./install.sh` znovu.
 
 ## Úpravy
 
-Položky menu jsou na začátku souboru `launcher.py` v seznamu `ENTRIES`. Každá má název, ikonu a příkaz. Třeba Lutris přidáš takhle:
+Položky menu jsou na začátku souboru `launcher.py` ve slovníku `MENUS` (`main` je hlavní menu, `power` podmenu Vypnout). Každá položka má název, ikonu a buď příkaz (`cmd`), nebo odkaz na podmenu (`submenu`). Třeba Lutris přidáš takhle:
 
 ```python
 {

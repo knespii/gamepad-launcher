@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gamepad launcher: press the controller's Home button to pick Steam or Heroic.
+"""Gamepad launcher: press the controller's Home button to pick Steam, Heroic or power options.
 
 Reads gamepads straight from /dev/input (user must be in the 'input' group),
 shows a fullscreen GTK menu and launches the chosen app in Big Picture /
@@ -8,6 +8,7 @@ fullscreen mode. No extra Python packages needed.
 import fcntl
 import glob
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -15,27 +16,51 @@ import sys
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk, Gdk  # noqa: E402
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
-# --- Launchers -----------------------------------------------------------
-ENTRIES = [
-    {
-        "name": "Steam",
-        "icon": "steam",
-        "cmd": ["steam", "-bigpicture"],
-    },
-    {
-        "name": "Heroic",
-        "icon": "com.heroicgameslauncher.hgl",
-        "cmd": ["flatpak", "run", "com.heroicgameslauncher.hgl", "--fullscreen", "--console"],
-    },
-    {
-        "name": "Vypnout",
-        "icon": "system-shutdown",
-        "cmd": ["systemctl", "poweroff"],
-        "confirm": "Opravdu vypnout?",
-    },
-]
+# --- Menus ---------------------------------------------------------------
+# Each entry runs "cmd", or opens another menu with "submenu".
+# "confirm" asks for a second A press before running.
+MENUS = {
+    "main": [
+        {
+            "name": "Steam",
+            "icon": "steam",
+            "cmd": ["steam", "-bigpicture"],
+        },
+        {
+            "name": "Heroic",
+            "icon": "com.heroicgameslauncher.hgl",
+            "cmd": ["flatpak", "run", "com.heroicgameslauncher.hgl", "--fullscreen", "--console"],
+        },
+        {
+            "name": "Vypnout",
+            "icon": ["system-shutdown", "system-shutdown-symbolic"],
+            "submenu": "power",
+        },
+    ],
+    "power": [
+        {
+            "name": "Uspat",
+            "icon": ["system-suspend", "system-suspend-symbolic", "weather-clear-night-symbolic"],
+            "cmd": ["systemctl", "suspend"],
+        },
+        {
+            "name": "Vypnout PC",
+            "icon": ["system-shutdown", "system-shutdown-symbolic"],
+            "cmd": ["systemctl", "poweroff"],
+            "confirm": "Opravdu vypnout?",
+        },
+        {
+            "name": "Zavřít launchery",
+            "icon": ["application-exit", "window-close", "window-close-symbolic"],
+            # "steam -shutdown" would start Steam if it isn't running, so check first.
+            "cmd": ["sh", "-c", "pgrep -x steam >/dev/null && steam -shutdown; "
+                                "flatpak kill com.heroicgameslauncher.hgl 2>/dev/null; true"],
+        },
+    ],
+}
 
 # --- evdev constants -----------------------------------------------------
 EV_KEY, EV_ABS = 0x01, 0x03
@@ -77,6 +102,9 @@ class App:
     def __init__(self):
         self.pads = {}  # path -> (Gamepad, watch id)
         self.window = None
+        self.box = None
+        self.hint = None
+        self.menu = "main"
         self.selected = 0
         self.cards = []
         self.labels = []
@@ -130,7 +158,7 @@ class App:
             elif self.window and code in (BTN_SOUTH, BTN_START):
                 self.launch()
             elif self.window and code == BTN_EAST:
-                self.close()
+                self.back()
         elif etype == EV_ABS and self.window:
             if code == ABS_HAT0X and value:
                 self.move(1 if value > 0 else -1)
@@ -151,21 +179,44 @@ class App:
         else:
             self.open()
 
+    @property
+    def entries(self):
+        return MENUS[self.menu]
+
     def open(self):
-        self.selected = 0
-        self.armed = False
         win = Gtk.Window(title="Gamepad Launcher")
         win.set_decorated(False)
         win.set_keep_above(True)
         win.connect("key-press-event", self.on_key)
         win.connect("delete-event", lambda *_: self.close() or True)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=60)
-        box.set_halign(Gtk.Align.CENTER)
-        box.set_valign(Gtk.Align.CENTER)
+        self.box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=60)
+        self.box.set_halign(Gtk.Align.CENTER)
+        self.box.set_valign(Gtk.Align.CENTER)
+        self.box.set_homogeneous(True)
+        self.hint = Gtk.Label()
+        self.hint.get_style_context().add_class("hint")
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=50)
+        outer.set_valign(Gtk.Align.CENTER)
+        outer.pack_start(self.box, False, False, 0)
+        outer.pack_start(self.hint, False, False, 0)
+        win.add(outer)
+
+        self.window = win
+        self.set_menu("main")
+        win.fullscreen()
+        win.show_all()
+        win.present()
+
+    def set_menu(self, name):
+        self.menu = name
+        self.selected = 0
+        self.armed = False
+        for child in self.box.get_children():
+            child.destroy()
         self.cards = []
         self.labels = []
-        for i, e in enumerate(ENTRIES):
+        for i, e in enumerate(self.entries):
             card = Gtk.EventBox()
             card.get_style_context().add_class("card")
             inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
@@ -173,7 +224,8 @@ class App:
             inner.set_margin_bottom(40)
             inner.set_margin_start(60)
             inner.set_margin_end(60)
-            img = Gtk.Image.new_from_icon_name(e["icon"], Gtk.IconSize.DIALOG)
+            names = [e["icon"]] if isinstance(e["icon"], str) else e["icon"]
+            img = Gtk.Image.new_from_gicon(Gio.ThemedIcon.new_from_names(names), Gtk.IconSize.DIALOG)
             img.set_pixel_size(160)
             label = Gtk.Label(label=e["name"])
             label.get_style_context().add_class("title")
@@ -181,31 +233,27 @@ class App:
             inner.pack_start(label, False, False, 0)
             card.add(inner)
             card.connect("button-press-event", lambda _w, _e, i=i: self.select_and_launch(i))
-            box.pack_start(card, False, False, 0)
+            self.box.pack_start(card, False, False, 0)
             self.cards.append(card)
             self.labels.append(label)
-
-        hint = Gtk.Label(label="◀ ▶  vybrat     A  spustit     B  zavřít")
-        hint.get_style_context().add_class("hint")
-        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=50)
-        outer.set_valign(Gtk.Align.CENTER)
-        outer.pack_start(box, False, False, 0)
-        outer.pack_start(hint, False, False, 0)
-        win.add(outer)
-
-        self.window = win
+        back = "zavřít" if name == "main" else "zpět"
+        self.hint.set_text(f"◀ ▶  vybrat     A  spustit     B  {back}")
+        self.box.show_all()
         self.refresh()
-        win.fullscreen()
-        win.show_all()
-        win.present()
 
     def close(self):
         if self.window:
             self.window.destroy()
             self.window = None
 
+    def back(self):
+        if self.menu == "main":
+            self.close()
+        else:
+            self.set_menu("main")
+
     def move(self, d):
-        self.selected = (self.selected + d) % len(ENTRIES)
+        self.selected = (self.selected + d) % len(self.entries)
         self.armed = False
         self.refresh()
 
@@ -215,7 +263,7 @@ class App:
             (ctx.add_class if i == self.selected else ctx.remove_class)("selected")
             armed = self.armed and i == self.selected
             (ctx.add_class if armed else ctx.remove_class)("armed")
-            e = ENTRIES[i]
+            e = self.entries[i]
             self.labels[i].set_text(f"{e['confirm']} (A)" if armed else e["name"])
 
     def select_and_launch(self, i):
@@ -223,14 +271,22 @@ class App:
         self.launch()
 
     def launch(self):
-        entry = ENTRIES[self.selected]
+        entry = self.entries[self.selected]
+        if "submenu" in entry:
+            self.set_menu(entry["submenu"])
+            return
         if entry.get("confirm") and not self.armed:
             self.armed = True
             self.refresh()
             return
         self.close()
         print(f"launching {entry['name']}", flush=True)
-        subprocess.Popen(entry["cmd"], start_new_session=True,
+        cmd = entry["cmd"]
+        # Run in its own systemd scope, so restarting this service doesn't kill
+        # Steam/Heroic and their games (and their memory isn't counted as ours).
+        if shutil.which("systemd-run"):
+            cmd = ["systemd-run", "--user", "--scope", "--collect", "--quiet", "--"] + cmd
+        subprocess.Popen(cmd, start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def on_key(self, _w, ev):
@@ -241,14 +297,14 @@ class App:
             self.move(1)
         elif key in ("Return", "KP_Enter", "space"):
             self.launch()
-        elif key == "Escape":
-            self.close()
+        elif key in ("Escape", "BackSpace"):
+            self.back()
         return True
 
 
 CSS = b"""
 window { background-color: rgba(10, 12, 18, 0.96); }
-.card { border-radius: 24px; background-color: #1e2230; border: 4px solid transparent; }
+.card { color: #e8ecf5; border-radius: 24px; background-color: #1e2230; border: 4px solid transparent; }
 .card.selected { background-color: #2c3550; border-color: #5aa0ff; }
 .card.armed { background-color: #4a1f24; border-color: #ff5a5a; }
 .title { font-size: 36px; font-weight: bold; color: #e8ecf5; }
