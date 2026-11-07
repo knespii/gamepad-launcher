@@ -1,8 +1,8 @@
 # Gamepad Launcher
 
-Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Steam** v režimu Big Picture, **Heroic Games Launcher** na celou obrazovku, nebo **vypni PC**. Celé to ovládáš jen ovladačem, bez myši a klávesnice.
+Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Steam** v režimu Big Picture, **Heroic Games Launcher** v console módu na celou obrazovku, nebo **vypni PC**. Celé to ovládáš jen ovladačem, bez myši a klávesnice.
 
-*English: Press the Home/Guide button on your gamepad to get a fullscreen menu: Steam Big Picture, Heroic (fullscreen) or power off. Linux, no root, no extra Python packages.*
+*English: Press the Home/Guide button on your gamepad to get a fullscreen menu: Steam Big Picture, Heroic (console mode, fullscreen) or power off. Linux, no root, no extra Python packages.*
 
 ## Jak to funguje
 

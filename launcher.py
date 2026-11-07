@@ -27,7 +27,7 @@ ENTRIES = [
     {
         "name": "Heroic",
         "icon": "com.heroicgameslauncher.hgl",
-        "cmd": ["flatpak", "run", "com.heroicgameslauncher.hgl", "--fullscreen"],
+        "cmd": ["flatpak", "run", "com.heroicgameslauncher.hgl", "--fullscreen", "--console"],
     },
     {
         "name": "Vypnout",
