@@ -67,11 +67,19 @@ EV_KEY, EV_ABS = 0x01, 0x03
 BTN_SOUTH, BTN_EAST, BTN_MODE, BTN_START = 304, 305, 316, 315
 ABS_X, ABS_HAT0X = 0x00, 0x10
 EVENT = struct.Struct("llHHi")  # timeval, type, code, value
+EVIOCGRAB = (1 << 30) | (4 << 16) | (ord("E") << 8) | 0x90  # _IOW('E', 0x90, int)
+
+# While Steam runs, a short Home press belongs to Steam; hold it this long to open our menu.
+HOLD_MS = 1000
 
 
 def eviocgabs(axis):
     # _IOR('E', 0x40 + axis, struct input_absinfo) ; absinfo = 6 x int32
     return (2 << 30) | (24 << 16) | (ord("E") << 8) | (0x40 + axis)
+
+
+def steam_running():
+    return subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
 
 
 def has_key(event_name, code):
@@ -97,6 +105,14 @@ class Gamepad:
             pass
         self.stick_dir = 0
 
+    def grab(self, on):
+        # Exclusive access while the menu is open, so apps behind it
+        # don't also react to the buttons.
+        try:
+            fcntl.ioctl(self.fd, EVIOCGRAB, 1 if on else 0)
+        except OSError:
+            pass
+
 
 class App:
     def __init__(self):
@@ -109,6 +125,7 @@ class App:
         self.cards = []
         self.labels = []
         self.armed = False  # first A press on a "confirm" entry only asks
+        self.hold_timer = None
         self.scan()
         GLib.timeout_add_seconds(2, self.scan)
 
@@ -124,6 +141,8 @@ class App:
                 continue
             wid = GLib.io_add_watch(pad.fd, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self.on_input, pad)
             self.pads[path] = (pad, wid)
+            if self.window:
+                pad.grab(True)
             print(f"gamepad connected: {path}", flush=True)
         return True
 
@@ -152,10 +171,13 @@ class App:
         return True
 
     def handle(self, pad, etype, code, value):
-        if etype == EV_KEY and value == 1:
-            if code == BTN_MODE:
-                self.toggle()
-            elif self.window and code in (BTN_SOUTH, BTN_START):
+        if etype == EV_KEY and code == BTN_MODE:
+            if value == 1:
+                self.home_pressed()
+            elif value == 0:
+                self.cancel_hold()
+        elif etype == EV_KEY and value == 1:
+            if self.window and code in (BTN_SOUTH, BTN_START):
                 self.launch()
             elif self.window and code == BTN_EAST:
                 self.back()
@@ -170,14 +192,26 @@ class App:
                 pad.stick_dir = d
 
     # --- menu ------------------------------------------------------------
-    def toggle(self):
+    def home_pressed(self):
         if self.window:
             self.close()
-        elif subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0:
-            # Steam is running and handles the Home button by itself.
-            pass
+        elif steam_running():
+            # Short press is Steam's; open our menu only if Home is held.
+            self.cancel_hold()
+            self.hold_timer = GLib.timeout_add(HOLD_MS, self.on_hold)
         else:
             self.open()
+
+    def on_hold(self):
+        self.hold_timer = None
+        if not self.window:
+            self.open()
+        return False
+
+    def cancel_hold(self):
+        if self.hold_timer:
+            GLib.source_remove(self.hold_timer)
+            self.hold_timer = None
 
     @property
     def entries(self):
@@ -203,6 +237,8 @@ class App:
         win.add(outer)
 
         self.window = win
+        for pad, _ in self.pads.values():
+            pad.grab(True)
         self.set_menu("main")
         win.fullscreen()
         win.show_all()
@@ -245,6 +281,8 @@ class App:
         if self.window:
             self.window.destroy()
             self.window = None
+            for pad, _ in self.pads.values():
+                pad.grab(False)
 
     def back(self):
         if self.menu == "main":

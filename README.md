@@ -8,7 +8,8 @@ Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Stea
 
 - Malý program na pozadí čte ovladač přímo z `/dev/input`.
 - Po stisku **Home** ukáže menu přes celou obrazovku.
-- Když už Steam běží, menu se neukáže, protože Steam na Home reaguje sám.
+- Když už Steam běží, krátký stisk Home patří Steamu (otevře jeho menu). Menu launcheru otevřeš **podržením Home na 1 sekundu**.
+- Když je menu otevřené, ovladač ho ovládá výhradně, takže Heroic a hry v pozadí na tlačítka nereagují. Steam může ovladač číst jinou cestou, takže ten na ně reagovat může.
 - Ovladač můžeš kdykoli odpojit a znovu připojit, launcher ho najde sám.
 - Běží jako uživatelská služba systemd: spustí se po přihlášení, a kdyby spadl, sám se znovu nahodí.
 
@@ -17,6 +18,7 @@ Zmáčkni tlačítko **Home** na ovladači a vyber si, co chceš spustit: **Stea
 | Tlačítko | Akce |
 |---|---|
 | **Home** | otevřít / zavřít menu |
+| **Home podržet 1 s** | otevřít menu, když běží Steam |
 | **◀ ▶** (D-pad nebo levá páčka) | výběr |
 | **A** nebo **Start** | spustit |
 | **B** | zpět / zavřít menu |
